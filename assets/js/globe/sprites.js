@@ -24,14 +24,23 @@
     g.lineJoin = "round"; g.lineCap = "round";
     g.strokeStyle = C.ink; g.lineWidth = Math.max(0.6, H / 26);
     g.stroke(new Path2D(p.stem));
+    if (H >= 10) { var st = new Path2D(p.stip); g.fillStyle = C.hopWash; g.fill(st); g.lineWidth = Math.max(0.4, H / 40); g.stroke(st); }
     p.scales.forEach(function (s) {
       var path = new Path2D(s.d + "Z");
       g.fillStyle = tint === "ochre" ? (s.side < -0.2 ? "#EBCB86" : s.side > 0.3 ? "#C99A47" : "#DDB063") : HA.art.coneFill(s.side);
       g.fill(path);
       g.strokeStyle = C.inkA(0.85); g.lineWidth = Math.max(0.45, H / 34);
       g.stroke(path);
+      if (H >= 12 && tint !== "ochre") {
+        g.strokeStyle = s.side < 0.4 ? "rgba(247,244,210,.85)" : "rgba(247,244,210,.45)";
+        g.lineWidth = Math.max(0.45, s.w * 0.09); g.stroke(new Path2D(s.hl));
+      }
     });
-    if (H >= 14) { g.strokeStyle = C.inkA(0.45); g.lineWidth = 0.4; g.stroke(new Path2D(p.veins)); }
+    if (H >= 14) {
+      g.strokeStyle = C.inkA(0.4); g.lineWidth = 0.4; g.stroke(new Path2D(p.veins));
+      g.fillStyle = HA.art.LUPULIN;
+      p.lup.forEach(function (l) { g.beginPath(); g.arc(l.x, l.y, l.r, 0, Math.PI * 2); g.fill(); });
+    }
     var out = { c: c, w: w, h: h, ax: cx + W * 0.08, ay: top - H * 0.2 };
     coneCache[key] = out;
     return out;
