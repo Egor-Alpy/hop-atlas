@@ -568,10 +568,15 @@
     function renderRegion(id) {
       var r = D.byId[id], c = COUNTRIES[r.country], f = D.feature(id), t6 = TOP6[r.country];
       var nb = [D.ranked[r.rank - 2], r, D.ranked[r.rank]].filter(Boolean);
-      var prev = D.ranked[r.rank - 2], next = D.ranked[r.rank];
+      // по кругу: после последнего — первый, перед первым — последний (кнопки всегда активны)
+      var prev = D.ranked[(r.rank - 2 + D.count) % D.count], next = D.ranked[r.rank % D.count];
+      var navHtml = '<nav class="amap__nav" aria-label="Соседние регионы по объёму">' +
+        '<button type="button" class="btn btn--secondary btn--sm" data-go="' + (prev ? prev.id : "") + '"' + (prev ? "" : " disabled") + ">← №" + NB + (prev ? prev.rank : "") + "</button>" +
+        '<button type="button" class="btn btn--secondary btn--sm" data-go="' + (next ? next.id : "") + '"' + (next ? "" : " disabled") + ">№" + NB + (next ? next.rank : "") + " →</button></nav>";
       detail.innerHTML =
         '<div class="amap__dtop"><button type="button" class="link-act" data-back="1"><span aria-hidden="true">←</span> Все регионы</button>' +
         '<button class="icon-btn" type="button" data-unsel="1" aria-label="Снять выбор"><svg viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="M2.5 2.5l9 9M11.5 2.5l-9 9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button></div>' +
+        navHtml +
         '<p class="amap__kick">' + HA.t(r.country) + " · №" + NB + r.rank + " из&nbsp;" + D.count + "</p>" +
         '<h3 class="amap__dh" id="amap-dh" tabindex="-1">' + HA.t(r.name) + "</h3>" +
         '<p class="amap__big">' + HA.fmt(r.t) + ' <span class="u">т/год</span></p>' +
@@ -583,10 +588,7 @@
         '<p class="amap__note">' + c.regions.length + " " + HA.plural(c.regions.length, ["регион", "региона", "регионов"]) + " атласа, вместе " + HA.fmt(c.sum) + NB + "т/год" + STAR +
         (t6 ? ". В&nbsp;топ-6 стран 2025&nbsp;г.&nbsp;— №" + NB + t6.rank + ", " + HA.fmtAuto(t6.v) + NB + "тыс." + NB + "т" : "") + ".</p>" +
         (c.regions.length > 1 ? '<p><button type="button" class="link-act" data-country="' + HA.esc(r.country) + '">Все регионы страны <span aria-hidden="true">→</span></button></p>' : "") +
-        flowsBlock(r.country) +
-        '<nav class="amap__nav" aria-label="Соседние регионы по объёму">' +
-        '<button type="button" class="btn btn--secondary btn--sm" data-go="' + (prev ? prev.id : "") + '"' + (prev ? "" : " disabled") + ">← №" + NB + (prev ? prev.rank : "") + "</button>" +
-        '<button type="button" class="btn btn--secondary btn--sm" data-go="' + (next ? next.id : "") + '"' + (next ? "" : " disabled") + ">№" + NB + (next ? next.rank : "") + " →</button></nav>";
+        flowsBlock(r.country);
       HA.typoDOM(detail);
     }
     function renderCountry(name) {
