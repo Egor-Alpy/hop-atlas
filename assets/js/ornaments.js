@@ -127,25 +127,59 @@
   function botanical(bare) {
     var s = "";
     var stem = "M70 500C104 452 76 404 116 362S182 306 172 258 156 182 216 152 290 118 268 74 302 22 350 16";
+    // тот же стебель — кубическими сегментами (S развёрнут): по нему ставятся узлы,
+    // чтобы листья и шишки крепились ровно к стеблю
+    var SEG = [[[70, 500], [104, 452], [76, 404], [116, 362]], [[116, 362], [156, 320], [182, 306], [172, 258]],
+      [[172, 258], [162, 210], [156, 182], [216, 152]], [[216, 152], [276, 122], [290, 118], [268, 74]], [[268, 74], [246, 30], [302, 22], [350, 16]]];
+    function bez(c, t) { var u = 1 - t; return [u * u * u * c[0][0] + 3 * u * u * t * c[1][0] + 3 * u * t * t * c[2][0] + t * t * t * c[3][0], u * u * u * c[0][1] + 3 * u * u * t * c[1][1] + 3 * u * t * t * c[2][1] + t * t * t * c[3][1]]; }
+    function at(T) { // T: 0…5 вдоль стебля
+      var i = Math.min(4, Math.floor(T)), t = T - i, p = bez(SEG[i], t), q = bez(SEG[i], Math.min(1, t + 0.01)), q0 = bez(SEG[i], Math.max(0, t - 0.01));
+      return { x: p[0], y: p[1], a: Math.atan2(q[1] - q0[1], q[0] - q0[0]) };
+    }
+    var r2 = A.r2;
     s += '<path class="b-stem" d="' + stem + '" fill="none" stroke="' + INK + '" stroke-width="1.6" stroke-linecap="round"/>';
     s += '<path d="' + stem + '" fill="none" stroke="' + INK + '" stroke-width=".55" stroke-opacity=".5" transform="translate(2.4 1.2)"/>';
-    // шероховатость стебля — мелкие штрихи-волоски
-    s += '<path d="M98 446l5-3M95 430l5-2M110 380l5-3M134 336l4-4M160 300l5-2M172 268l5 0M176 238l5-3M196 172l4-4M226 150l3-4M262 126l5-2M276 94l5-1M290 52l4-4M320 26l4-3" stroke="' + INK + '" stroke-width=".6" stroke-opacity=".6"/>';
-    // листья — супротивные пары в узлах (черешок к стеблю)
-    var L = function (x, y, rot, size) { return A.leafSVG(x, y, rot, size, { ink: INK, sw: 1, fill: "#B9C67F", washLight: "#DFE3B8", fillOpacity: 0.62 }); };
-    s += L(112, 372, -62, 30) + L(118, 366, 52, 33);
-    s += L(172, 262, -70, 28) + L(176, 256, 46, 30);
-    s += L(240, 140, -60, 22) + L(248, 136, 58, 24);
-    s += L(286, 66, -40, 15) + L(292, 62, 70, 14);
-    // гроздья шишек: висят вниз на плодоножках
-    var cone = function (x, y, H, tilt) {
-      return '<g transform="rotate(' + tilt + " " + x + " " + y + ')">' +
-        '<path d="M' + x + "," + (y - H * 0.42) + "q" + (H * 0.06) + "," + (H * 0.2) + " 0," + (H * 0.42) + '" fill="none" stroke="' + INK + '" stroke-width=".9"/>' +
-        A.coneSVG(x, y, H, H * 0.64, { ink: INK, sw: 0.9 }) + "</g>";
-    };
-    s += '<path d="M136 330q12 6 14 18M138 332q-6 10-4 20M210 150q-2 10 2 22" fill="none" stroke="' + INK + '" stroke-width=".9"/>';
-    s += cone(152, 350, 46, 6) + cone(132, 356, 38, -10) + cone(212, 172, 40, -4);
-    s += cone(306, 46, 30, 10) + cone(324, 36, 24, -14);
+    // шероховатость стебля — волоски-шипики, растут из стебля под углом вверх
+    var hairs = "";
+    for (var hT = 0.15; hT < 4.9; hT += 0.21) { var hp = at(hT), ha = hp.a - 0.7; hairs += "M" + r2(hp.x) + "," + r2(hp.y) + "l" + r2(Math.cos(ha) * 4.5) + "," + r2(Math.sin(ha) * 4.5); }
+    s += '<path d="' + hairs + '" stroke="' + INK + '" stroke-width=".55" stroke-opacity=".55" stroke-linecap="round"/>';
+    var leaves = "", cones = "", stalks = "";
+    var LEAF = function (x, y, rot, size) { return A.leafSVG(x, y, rot, size, { ink: INK, sw: 1, fill: "#B9C67F", washLight: "#DFE3B8", fillOpacity: 0.62 }); };
+    var anchors = {};
+    /* узел: пара супротивных листьев на черешках + (необязательно) гроздь шишек из пазухи */
+    function node(T, size, cone) {
+      var p = at(T);
+      [-1, 1].forEach(function (sd, j) {
+        var pa = p.a + sd * 1.15, pl = size * 0.55;             // черешок — под углом к стеблю
+        var ex = p.x + Math.cos(pa) * pl, ey = p.y + Math.sin(pa) * pl;
+        stalks += "M" + r2(p.x) + "," + r2(p.y) + "Q" + r2(p.x + Math.cos(pa) * pl * 0.5 + Math.cos(p.a) * 2) + "," + r2(p.y + Math.sin(pa) * pl * 0.5 + Math.sin(p.a) * 2) + " " + r2(ex) + "," + r2(ey);
+        var rot = (pa + Math.PI / 2) * 180 / Math.PI;             // лист смотрит вдоль черешка
+        var sz = size * (j ? 1.06 : 0.94);
+        leaves += LEAF(ex, ey, rot, sz);
+        if (!anchors.leaf && size > 28 && sd === -1) anchors.leaf = [ex + Math.cos(pa) * sz * 1.2, ey + Math.sin(pa) * sz * 1.2];
+      });
+      if (cone) {
+        // плодоножки выходят из пазухи (точка узла), свисают и держат шишки
+        cone.forEach(function (c) {
+          var H = c[0], dx = c[1], dy = c[2];
+          var ex = p.x + dx, ey = p.y + dy;                       // конец плодоножки = черешок шишки
+          stalks += "M" + r2(p.x) + "," + r2(p.y) + "C" + r2(p.x + dx * 0.4) + "," + r2(p.y + dy * 0.1) + " " + r2(ex) + "," + r2(ey - dy * 0.6) + " " + r2(ex) + "," + r2(ey);
+          var W = H * 0.64, top = ey + H * 0.24;                  // coneSVG: черешок шишки начинается в (cx + 0,1W, top − 0,24H)
+          var cx = ex - W * 0.1;
+          cones += "<g>" + A.coneSVG(cx, top, H, W, { ink: INK, sw: 0.9 }) + "</g>";
+          if (!anchors.cone && H > 40) anchors.cone = [cx, top + H * 0.55];
+        });
+      }
+      return p;
+    }
+    node(0.62, 30, [[46, 14, 12], [38, -10, 18]]);
+    var mid = node(1.55, 28, null);
+    node(2.55, 22, [[40, 10, 14]]);
+    node(3.6, 16, null);
+    node(4.35, 13, [[28, 8, 10], [22, 22, 6]]);
+    anchors.stem = (function () { var q = at(2.05); return [q.x, q.y]; })();
+    s += '<path d="' + stalks + '" fill="none" stroke="' + INK + '" stroke-width=".95" stroke-linecap="round"/>';
+    s += leaves + cones;
     if (bare) return '<svg viewBox="40 0 330 520" aria-hidden="true" focusable="false">' + s + "</svg>";
     // подписи с выносками: точка стоит на самом органе (шишка, пластинка листа, стебель),
     // линия выходит из конца подчёркивания слова и не проходит через буквы
@@ -156,13 +190,14 @@
         '<circle cx="' + dot[0] + '" cy="' + dot[1] + '" r="2.6" fill="#FAF5E8" stroke="#5A4A38" stroke-width=".8"/><circle cx="' + dot[0] + '" cy="' + dot[1] + '" r="1.1" fill="#5A4A38"/>';
     };
     // шишка — нижняя шишка грозди
-    s += lead("M156 380L222 404H292", [156, 380]);
+    var c0 = anchors.cone, l0 = anchors.leaf, t0 = anchors.stem;
+    s += lead("M" + r2(c0[0]) + "," + r2(c0[1]) + "L222 404H292", c0);
     s += "<text " + ann + ' x="226" y="398">strobilus</text><text ' + cap + ' x="226" y="418">ШИШКА</text>';
     // лист — пластинка левого листа средней пары
-    s += lead("M6 226H52L135 250", [135, 250]);
+    s += lead("M6 226H52L" + r2(l0[0]) + "," + r2(l0[1]), l0);
     s += "<text " + ann + ' x="8" y="220">folium</text><text ' + cap + ' x="8" y="240">ЛИСТ</text>';
     // вьющийся стебель — точка на линии стебля (изгиб между парами листьев), подпись слева — на свободном поле
-    s += lead("M6 156H160L168 198", [168, 198]);
+    s += lead("M6 156H140L" + r2(t0[0]) + "," + r2(t0[1]), t0);
     s += "<text " + ann + ' x="8" y="150">caulis volubilis</text><text ' + cap + ' x="8" y="172">ВЬЮЩИЙСЯ СТЕБЕЛЬ</text>';
     return '<svg viewBox="0 0 400 520" role="img" aria-labelledby="plant-t" focusable="false"><title id="plant-t">Ботанический рисунок хмеля обыкновенного: вьющийся стебель, супротивные листья с пильчатым краем, шишки</title>' + s + "</svg>";
   }

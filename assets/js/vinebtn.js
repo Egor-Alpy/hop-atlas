@@ -27,6 +27,8 @@
     var out = { stems: "", leaves: "", tips: "", cones: "" };
     // направления побегов (градусы, 0 — вправо, −90 — вверх): веером вокруг кнопки
     // вниз побеги не идут — там подсказка и легенда; вбок — длиннее
+    // нижняя граница куста: чуть ниже кнопки — ничего не обрезается, ниже идёт подсказка
+    var LIM = P + h + 9;
     var DIRS = [-176, -156, -131, -104, -84, -58, -33, -10, 8, 22, 158, 172];
     var GROW = 0.95;
     DIRS.forEach(function (deg, si) {
@@ -35,7 +37,11 @@
       // старт — за кнопкой, на эллипсе внутри неё
       var sx = cx + ca * w * 0.34, sy = cy + sa * h * 0.3;
       // длина: вбок длиннее, вверх-вниз короче (не закрывать глобус и подпись)
-      var len = (Math.abs(ca) * 58 + Math.abs(sa) * (sa < 0 ? 34 : 14)) * (0.85 + rnd() * 0.25);
+      // на узком экране сверху вплотную кнопки видов — вверх куст почти не растёт
+      var up = window.innerWidth < 1024 ? 10 : 34;
+      // вбок — не дальше края экрана (на телефоне кнопка во всю ширину)
+      var side = Math.max(10, Math.min(58, (window.innerWidth - w) / 2 - 12));
+      var len = (Math.abs(ca) * side + Math.abs(sa) * (sa < 0 ? up : 14)) * (0.85 + rnd() * 0.25);
       var reach = len + Math.abs(ca) * w * 0.16 + Math.abs(sa) * h * 0.2; // путь из-за кнопки наружу
       var bend = (rnd() - 0.5) * 0.8 - 0.3 * Math.sign(ca || 1) * (Math.abs(sa) < 0.35 ? 1 : 0.4); // боковые побеги загибаются вверх // изгиб побега
       // побег «ищет опору»: направление меняется по сумме случайных волн,
@@ -50,7 +56,10 @@
         if (loopAt > 0 && Math.abs(t - loopAt) < 0.1) curv += loopDir * (Math.PI * 2) / (0.2 * N); // полный виток за 20 % длины
         hd += curv;
         var ss = ds * (loopAt > 0 && Math.abs(t - loopAt) < 0.1 ? 0.55 : 1);
-        pts.push([pts[i - 1][0] + Math.cos(hd) * ss, pts[i - 1][1] + Math.sin(hd) * ss]);
+        var nx2 = pts[i - 1][0] + Math.cos(hd) * ss, ny2 = pts[i - 1][1] + Math.sin(hd) * ss;
+        // упёрся в нижнюю границу — побег отворачивает вверх
+        if (ny2 > LIM - 3) { hd = -Math.abs(hd % (2 * Math.PI)) * 0.3 + (Math.cos(hd) >= 0 ? -0.35 : Math.PI + 0.35); ny2 = Math.min(ny2, LIM - 3); }
+        pts.push([nx2, ny2]);
       }
       // длина по точкам
       var acc = [0];
@@ -95,19 +104,21 @@
         var lx = p[0] + Math.cos(pa) * plen, ly = p[1] + Math.sin(pa) * plen;
         var rot = dir + side * (34 + rnd() * 40) + 90 + (rnd() - 0.5) * 36;
         var din2 = delay + tt * dur + 0.04, dout2 = (1 - tt) * 0.18;
+        var rr0 = rot * Math.PI / 180, tipY = ly - Math.cos(rr0) * size * 2.3;
+        var leafOk = Math.max(ly, tipY) + size * 0.9 < LIM;
         // усик-завиток с узла (на каждом третьем)
         if (q % 3 === 2) {
           var ua = (dir - side * 55) * Math.PI / 180, ux = p[0] + Math.cos(ua) * 5, uy = p[1] + Math.sin(ua) * 5, sp = "M" + r2(p[0]) + "," + r2(p[1]) + "L" + r2(ux) + "," + r2(uy);
           for (var z2 = 1; z2 <= 16; z2++) { var zt2 = z2 / 16, an2 = ua + side * zt2 * Math.PI * 3, rr2 = 4 * (1 - zt2 * 0.75); sp += "L" + r2(ux + Math.cos(an2) * rr2 * zt2 + Math.cos(ua) * 3 * zt2) + "," + r2(uy + Math.sin(an2) * rr2 * zt2 + Math.sin(ua) * 3 * zt2); }
           out.tips += '<path class="v-st v-st--tip" d="' + sp + '" style="--l:40;--din:' + din2.toFixed(3) + "s;--dur:.4s;--dout:0s" + '" stroke-width=".65"/>';
         }
-        out.leaves += '<g class="v-it" style="--din:' + din2.toFixed(3) + "s;--dout:" + dout2.toFixed(3) + "s;transform-origin:" + r2(p[0]) + "px " + r2(p[1]) + 'px">' +
+        if (leafOk) out.leaves += '<g class="v-it" style="--din:' + din2.toFixed(3) + "s;--dout:" + dout2.toFixed(3) + "s;transform-origin:" + r2(p[0]) + "px " + r2(p[1]) + 'px">' +
           '<path d="M' + r2(p[0]) + "," + r2(p[1]) + "L" + r2(lx) + "," + r2(ly) + '" stroke="#4E6B25" stroke-width=".8" fill="none"/>' +
           A.leafSVG(lx, ly, rot, size, { ink: "#33281D", sw: 0.55, kind: size < 4.6 || q % 3 === 2 ? "heart" : "lobed" }) + "</g>";
         // шишки: на некоторых узлах побегов, висят вниз парой
         if ((si % 3 === 1 && q === 1) || (si % 4 === 0 && q === 2 && nodes > 3)) {
           var cs = 11 + rnd() * 3;
-          [-1, 1].forEach(function (o, j) {
+          if (p[1] + 5 + 3 + cs * 1.3 < LIM) [-1, 1].forEach(function (o, j) {
             var hx = p[0] + o * 4 + (j ? 1 : 0), hy = p[1] + 5 + j * 3;
             out.cones += '<g class="v-it v-it--cone" style="--din:' + (din2 + 0.12 + j * 0.06).toFixed(3) + "s;--dout:" + dout2.toFixed(3) + "s;transform-origin:" + r2(p[0]) + "px " + r2(p[1]) + 'px">' +
               '<path d="M' + r2(p[0]) + "," + r2(p[1]) + "Q" + r2(hx - o * 2) + "," + r2(p[1] + 1) + " " + r2(hx) + "," + r2(hy) + '" stroke="#4E6B25" stroke-width=".8" fill="none"/>' +
@@ -131,12 +142,12 @@
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.style.width = W + "px"; svg.style.height = H + "px";
-    svg.style.left = (btn.offsetLeft - P) + "px"; svg.style.top = (btn.offsetTop - P) + "px";
+    // положение — от рамки контейнера (offsetLeft врёт, если у предков display:contents)
+    var hb = host.getBoundingClientRect(), bb = btn.getBoundingClientRect();
+    svg.style.left = (bb.left - hb.left - P) + "px"; svg.style.top = (bb.top - hb.top - P) + "px";
     // порядок: стебли → усики → листья → шишки (шишки поверх листьев)
     // ниже кнопки куст не растёт (там подсказка и легенда): обрезаем у нижнего края
-    var clipId = "vclip" + Math.round(Math.random() * 1e6);
-    svg.innerHTML = '<defs><clipPath id="' + clipId + '"><rect x="0" y="0" width="' + W + '" height="' + r2(P + h + 6) + '"/></clipPath></defs>' +
-      '<g clip-path="url(#' + clipId + ')"><g fill="none" stroke="#4E6B25" stroke-linecap="round" stroke-linejoin="round">' + out.stems + out.tips + "</g>" + out.leaves + out.cones + "</g>";
+    svg.innerHTML = '<g><g fill="none" stroke="#4E6B25" stroke-linecap="round" stroke-linejoin="round">' + out.stems + out.tips + "</g>" + out.leaves + out.cones + "</g>";
     host.insertBefore(svg, btn); // куст — позади кнопки
 
     /* передний план: несколько листьев и пара шишек заходят на края кнопки —
@@ -182,8 +193,11 @@
       btn.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse" || e.pointerType === "pen") grow(false); });
       btn.addEventListener("focus", function () { if (btn.matches(":focus-visible")) grow(true); });
       btn.addEventListener("blur", function () { grow(false); });
-      var t = 0;
-      window.addEventListener("resize", function () { clearTimeout(t); t = setTimeout(rebuild, 120); });
+      var t = 0, lastW = 0;
+      var later = function () { clearTimeout(t); t = setTimeout(rebuild, 120); };
+      window.addEventListener("resize", later);
+      // размер кнопки меняется (шрифты, раскладка) — куст перестраивается
+      if ("ResizeObserver" in window) new ResizeObserver(function () { if (btn.offsetWidth !== lastW) { lastW = btn.offsetWidth; later(); } }).observe(btn);
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuild);
       // сенсорный экран: хмель прорастает, когда кнопка появляется на экране
       if (window.matchMedia && matchMedia("(hover: none)").matches && "IntersectionObserver" in window) {

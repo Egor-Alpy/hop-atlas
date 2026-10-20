@@ -896,3 +896,6 @@ html.amap-lock,html.amap-lock body{overflow:hidden}
 .atlas-vine .v-it--cone{transform:scale(0) translateY(-5px)}
 @media (prefers-reduced-motion:reduce){.atlas-vine .v-st,.atlas-vine .v-it{transition:none!important}}
 @media print{.atlas-vine{display:none}}
+.atlas-cta{margin-bottom:8px}
+@media (max-width:1023px){.atlas-cta{margin-top:26px}}
+.atlas-vine{max-width:none!important;max-height:none!important}
