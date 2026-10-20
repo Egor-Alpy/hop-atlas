@@ -881,14 +881,18 @@ html.amap-lock,html.amap-lock body{overflow:hidden}
   .atlas-btn{width:100%;max-width:440px}
 }
 
-/* хмель, обвивающий кнопку «Открыть атлас» (см. vinebtn.js) */
-.atlas-vine{position:absolute;pointer-events:none;overflow:visible;z-index:2}
-.atlas-vine .v-stem{transition:stroke-dashoffset .75s cubic-bezier(.55,.05,.45,1) .22s}
-.atlas-vine.is-grown .v-stem{stroke-dashoffset:0!important;transition:stroke-dashoffset 1.15s cubic-bezier(.33,.0,.2,1) 0s}
-.atlas-vine .v-item{transform-box:view-box;transform:scale(0) rotate(-24deg);opacity:0;
-  transition:transform .32s cubic-bezier(.5,0,.75,0) var(--dout),opacity .26s ease-in var(--dout)}
-.atlas-vine.is-grown .v-item{transform:none;opacity:1;
-  transition:transform .6s cubic-bezier(.34,1.5,.6,1) var(--din),opacity .35s ease-out var(--din)}
-.atlas-vine .v-item--cone{transform:scale(0) translateY(-6px)}
-@media (prefers-reduced-motion:reduce){.atlas-vine .v-stem,.atlas-vine .v-item{transition:none!important}}
+/* куст хмеля, разрастающийся из-за кнопки «Открыть атлас» (см. vinebtn.js) */
+.atlas-cta .atlas-btn{z-index:1}
+.atlas-vine{position:absolute;pointer-events:none;overflow:visible;z-index:0}
+.atlas-vine--front{z-index:2}
+.atlas-vine .v-st{stroke-dasharray:var(--l);stroke-dashoffset:var(--l);
+  transition:stroke-dashoffset .4s cubic-bezier(.5,0,.75,0) var(--dout)}
+.atlas-vine .v-st--hl{stroke:#9BB35A;stroke-opacity:.7}
+.atlas-vine.is-grown .v-st{stroke-dashoffset:0;transition:stroke-dashoffset var(--dur) linear var(--din)}
+.atlas-vine .v-it{transform-box:view-box;transform:scale(0) rotate(-30deg);opacity:0;
+  transition:transform .3s cubic-bezier(.5,0,.75,0) var(--dout),opacity .24s ease-in var(--dout)}
+.atlas-vine.is-grown .v-it{transform:none;opacity:1;
+  transition:transform .55s cubic-bezier(.3,1.45,.55,1) var(--din),opacity .3s ease-out var(--din)}
+.atlas-vine .v-it--cone{transform:scale(0) translateY(-5px)}
+@media (prefers-reduced-motion:reduce){.atlas-vine .v-st,.atlas-vine .v-it{transition:none!important}}
 @media print{.atlas-vine{display:none}}

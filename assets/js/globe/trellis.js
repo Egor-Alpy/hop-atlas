@@ -57,18 +57,25 @@
       ctx.beginPath();
       for (var i = 0; i <= n; i++) {
         var k = i / n, s = lo + k * (h - lo - 1);
-        var half = (3 + (cb + 2) * Math.pow(k, 0.8)) * CANOPY[(i + seed) % 32];
+        var half = (2.4 + (cb + 0.5) * Math.pow(k, 0.9)) * CANOPY[(i + seed) % 32];
         ctx.lineTo(twX(s) - half - 1.2 * Math.sin(k * 9 + seed), y - s);
       }
       for (var j = n; j >= 0; j--) {
         var k2 = j / n, s2 = lo + k2 * (h - lo - 1);
-        var half2 = (3 + (cb + 2) * Math.pow(k2, 0.8)) * CANOPY[(j + seed + 7) % 32];
+        var half2 = (2.4 + (cb + 0.5) * Math.pow(k2, 0.9)) * CANOPY[(j + seed + 7) % 32];
         ctx.lineTo(twX(s2) + half2 + 1.2 * Math.cos(k2 * 7 + seed), y - s2);
       }
       ctx.closePath();
-      ctx.fillStyle = hot ? "rgba(148,172,72,.62)" : "rgba(148,172,72,.48)"; ctx.fill();
-      ctx.save(); ctx.translate(1.3, -1); ctx.fillStyle = "rgba(196,206,120,.32)"; ctx.fill(); ctx.restore();
-      ctx.strokeStyle = "rgba(96,124,44,.34)"; ctx.lineWidth = 1; ctx.stroke();
+      // бумажная подложка: крона отделяется от карты (особенно от зелёных стран атласа)
+      ctx.save();
+      ctx.shadowColor = "rgba(51,40,29,.28)"; ctx.shadowBlur = 5; ctx.shadowOffsetX = 1.2; ctx.shadowOffsetY = 1.5;
+      ctx.strokeStyle = C.paperA(0.75); ctx.lineWidth = 2.6; ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = C.paperA(0.55); ctx.fill();
+      // крона — глубокая хмелевая зелень (темнее шалфейной заливки стран), свет слева
+      ctx.fillStyle = hot ? "rgba(92,128,40,.78)" : "rgba(98,132,46,.68)"; ctx.fill();
+      ctx.save(); ctx.translate(-1.2, -0.8); ctx.globalAlpha *= 0.55; ctx.fillStyle = "rgba(190,206,112,.6)"; ctx.fill(); ctx.restore();
+      ctx.strokeStyle = "rgba(52,78,24,.75)"; ctx.lineWidth = 0.9; ctx.stroke();
 
       // шпагат
       ctx.strokeStyle = C.inkA(0.5); ctx.lineWidth = 0.6;
@@ -112,15 +119,45 @@
 
     // жердь (её высота и есть объём) и перекладина
     var poleTop = top - (full ? 3 : 0);
+    var pw = full ? (hot ? 3.4 : 3) : 2;
     if (h > 0.4) {
-      ctx.strokeStyle = C.paperA(0.6); ctx.lineWidth = hot ? 4.6 : 4;
+      // подложка жерди
+      ctx.strokeStyle = C.paperA(0.85); ctx.lineWidth = pw + 3;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, poleTop); ctx.stroke();
-      ctx.strokeStyle = C.ink; ctx.lineWidth = hot ? 2.5 : 2;
+      // деревянная жердь: тёмная сторона, светлая грань слева, контур
+      ctx.strokeStyle = C.ink; ctx.lineWidth = pw + 0.8;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, poleTop); ctx.stroke();
+      if (full) {
+        ctx.strokeStyle = "#7A5530"; ctx.lineWidth = pw - 0.6;
+        ctx.beginPath(); ctx.moveTo(x, y - 0.5); ctx.lineTo(x, poleTop + 0.5); ctx.stroke();
+        ctx.strokeStyle = "rgba(214,176,118,.9)"; ctx.lineWidth = 0.7;
+        ctx.beginPath(); ctx.moveTo(x - pw * 0.22, y - 1); ctx.lineTo(x - pw * 0.22, poleTop + 1); ctx.stroke();
+      }
+      // насечки мерной рейки: каждые 10 000 т (если между ними ≥ 6 px)
+      var per = it.t > 0 ? h * 10000 / it.t : 0;
+      if (per >= 6) {
+        ctx.strokeStyle = C.paper; ctx.lineWidth = 1.1; ctx.lineCap = "butt";
+        ctx.beginPath();
+        for (var m = per; m < h - 2; m += per) { ctx.moveTo(x - pw * 0.5 - 1.6, y - m); ctx.lineTo(x + pw * 0.5 + 1.6, y - m); }
+        ctx.stroke();
+        ctx.strokeStyle = C.ink; ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (var m2 = per; m2 < h - 2; m2 += per) { ctx.moveTo(x - pw * 0.5 - 1.6, y - m2 - 0.9); ctx.lineTo(x + pw * 0.5 + 1.6, y - m2 - 0.9); }
+        ctx.stroke();
+        ctx.lineCap = "round";
+      }
     }
     if (full) {
-      ctx.lineWidth = 1.3;
+      // перекладина: подложка, брус, привязка к жерди, навершие
+      ctx.strokeStyle = C.paperA(0.85); ctx.lineWidth = 4.2;
       ctx.beginPath(); ctx.moveTo(x - cb, top); ctx.lineTo(x + cb + 1.5, top); ctx.stroke();
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x - cb, top); ctx.lineTo(x + cb + 1.5, top); ctx.stroke();
+      ctx.strokeStyle = "#8A6236"; ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.moveTo(x - cb + 0.8, top - 0.2); ctx.lineTo(x + cb + 0.7, top - 0.2); ctx.stroke();
+      ctx.strokeStyle = C.inkA(0.8); ctx.lineWidth = 0.6;
+      ctx.beginPath(); ctx.moveTo(x - 2.2, top - 2.2); ctx.lineTo(x + 2.2, top + 2.2); ctx.moveTo(x + 2.2, top - 2.2); ctx.lineTo(x - 2.2, top + 2.2); ctx.stroke();
+      ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(x, poleTop - 0.6, pw * 0.55, 0, Math.PI * 2); ctx.fill();
       // шишки под перекладиной
       var nc = coneCount(it.t);
       var spr = G.sprites.cone(h >= 40 ? 14 : 11.5);

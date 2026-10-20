@@ -248,7 +248,14 @@
       });
       items.forEach(function (it) {
         if (it.g <= 0.01) return;
-        ctx.globalAlpha = Math.min(1, it.g * 2); G.trellis.marker(ctx, it.x, it.y, it.state === "selected"); ctx.globalAlpha = 1;
+        ctx.globalAlpha = Math.min(1, it.g * 2);
+        // знак региона на карте — крупнее, с бумажным ореолом: точка видна поверх кроны и заливок
+        var sel = it.state === "selected", hot = it.state === "hot";
+        ctx.beginPath(); ctx.arc(it.x, it.y, 6.6, 0, Math.PI * 2); ctx.fillStyle = C.paperA(0.85); ctx.fill();
+        ctx.beginPath(); ctx.arc(it.x, it.y, 4.6, 0, Math.PI * 2); ctx.fillStyle = C.paper; ctx.fill();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = sel || hot ? C.ochreInk : C.ink; ctx.stroke();
+        ctx.beginPath(); ctx.arc(it.x, it.y, 1.9, 0, Math.PI * 2); ctx.fillStyle = sel ? C.ochreInk : C.ink; ctx.fill();
+        ctx.globalAlpha = 1;
       });
     }
     function rr(g, x, y, w, h) { g.beginPath(); g.rect(x, y, w, h); }
@@ -256,6 +263,12 @@
       labelsHit = [];
       if (st.t < 0.98) return;
       var placed = flowPaths.map(function (fp) { return fp.box; });
+      // подписи не закрывают знаки регионов и жерди
+      var obst = [];
+      items.forEach(function (it) {
+        obst.push({ x0: it.x - 7, y0: it.y - 7, x1: it.x + 7, y1: it.y + 7 });
+        if (it.box && it.box.full) obst.push({ x0: it.x - 3, y0: it.box.top - 4, x1: it.x + 3, y1: it.y });
+      });
       // сколько подписей: в мировом виде — крупнейшие, при приближении — все видимые
       var n = st.layer === "trade" ? 3 : st.k >= 3 ? 99 : st.k >= 1.8 ? 9 : 6;
       var cand = items.slice().sort(function (a, b) {
@@ -271,18 +284,32 @@
         ctx.font = "13px 'PT Serif', serif";
         var w2 = ctx.measureText(val).width;
         var bw = Math.max(w1, w2) + 12, bh = 36;
-        var top = it.y - Math.max(it.h, 10);
-        var tries = [[8, -bh / 2 - (it.y - top) / 2], [-bw - 8, -bh / 2 - (it.y - top) / 2], [8, -bh - (it.y - top) - 2], [-bw / 2, 8], [8, 6], [-bw - 8, 6]];
+        // кандидаты: вокруг знака на двух расстояниях (близко — без выноски, дальше — с выноской)
+        var tries = [];
+        [14, 40, 70].forEach(function (d) {
+          [[1, -0.5], [-1, -0.5], [1, 0.4], [-1, 0.4], [0, 1], [0, -1.6], [1, -1.4], [-1, -1.4]].forEach(function (v) {
+            tries.push([v[0] > 0 ? d : v[0] < 0 ? -bw - d : -bw / 2, v[1] * d * 0.8 - bh / 2 + (v[1] > 0 ? bh / 2 : v[1] < -1 ? -bh / 2 : 0)]);
+          });
+        });
         for (var i = 0; i < tries.length; i++) {
           var bx = it.x + tries[i][0], by = it.y + tries[i][1];
           var box = { x0: bx, y0: by, x1: bx + bw, y1: by + bh };
           if (box.x0 < OX + 4 || box.x1 > OX + SW - 4 || box.y0 < OY + 4 || box.y1 > OY + SH - 4) continue;
-          if (placed.some(function (b) { return b.x0 < box.x1 + 3 && b.x1 > box.x0 - 3 && b.y0 < box.y1 + 2 && b.y1 > box.y0 - 2; })) continue;
+          var hit = function (b) { return b.x0 < box.x1 + 3 && b.x1 > box.x0 - 3 && b.y0 < box.y1 + 2 && b.y1 > box.y0 - 2; };
+          if (placed.some(hit) || obst.some(hit)) continue;
           placed.push(box);
           var hot = it.state === "selected" || it.state === "hot";
-          ctx.fillStyle = hot ? "rgba(250,245,232,.96)" : C.paperA(0.82);
+          // выноска: от края подписи к знаку региона
+          var ex = HA.clamp(it.x, bx, bx + bw), ey = HA.clamp(it.y, by, by + bh);
+          if (Math.hypot(ex - it.x, ey - it.y) > 9) {
+            ctx.strokeStyle = C.paperA(0.9); ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(it.x, it.y); ctx.stroke();
+            ctx.strokeStyle = hot ? C.ochreInk : C.inkA(0.75); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(it.x, it.y); ctx.stroke();
+          }
+          ctx.fillStyle = hot ? "rgba(250,245,232,.97)" : "rgba(250,245,232,.9)";
           rr(ctx, bx, by, bw, bh); ctx.fill();
-          if (hot) { ctx.strokeStyle = C.ochreInk; ctx.lineWidth = 1; ctx.stroke(); }
+          ctx.strokeStyle = hot ? C.ochreInk : C.inkA(0.45); ctx.lineWidth = hot ? 1.2 : 0.8; ctx.stroke();
           ctx.font = "italic 15px 'Old Standard TT', serif"; ctx.fillStyle = C.ink;
           ctx.fillText(name, bx + 6, by + 15);
           ctx.font = "13px 'PT Serif', serif"; ctx.fillStyle = C.hopInk;
@@ -681,7 +708,7 @@
     function updateLegend() {
       legend.innerHTML = st.layer === "trade"
         ? '<span class="legend-line__ic" data-orn="icon-flow"></span><span>Пунктир со&nbsp;стрелкой&nbsp;— экспорт хмеля, толщина&nbsp;— сумма, млн&nbsp;долл. США</span>'
-        : '<span class="legend-line__ic" data-orn="icon-trellis"></span><span>Высота шпалеры&nbsp;— объём производства, т/год.<span class="amap__legend-x"> Наведите на&nbsp;шпалеру или страну&nbsp;— появится справка, нажмите&nbsp;— подробности.</span></span>';
+        : '<span class="legend-line__ic" data-orn="icon-trellis"></span><span>Высота шпалеры&nbsp;— объём производства, т/год; насечка&nbsp;— 10&nbsp;000&nbsp;т.<span class="amap__legend-x"> Наведите на&nbsp;шпалеру или страну&nbsp;— появится справка, нажмите&nbsp;— подробности.</span></span>';
       if (HA.orn && HA.orn.fill) HA.orn.fill(legend);
     }
 
