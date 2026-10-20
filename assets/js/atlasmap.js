@@ -355,19 +355,20 @@
 
     /* бумага окна, шапка и «передача» глобуса со страницы — по ходу разворота */
     function sm(a, b, x) { var v = HA.clamp((x - a) / (b - a), 0, 1); return v * v * (3 - 2 * v); }
-    function chrome(t, u, dir, el) {
-      bg.style.opacity = sm(0.08, 0.62, t).toFixed(3);
+    function chrome(t, u, dir, el, pop) {
+      // «всплытие» в центре: бумага закрывает страницу быстрее, глобус проявляется, а не подменяет
+      bg.style.opacity = (pop ? (dir > 0 ? sm(0, 0.16, u) : 1 - sm(0.8, 1, u)) : sm(0.08, 0.62, t)).toFixed(3);
       var b = sm(0.5, 0.95, t);
       bar.style.opacity = b.toFixed(3);
       bar.style.transform = "translateY(" + ((1 - b) * -14).toFixed(1) + "px)";
       if (dir > 0) {
-        // первые 180 мс глобус окна проявляется поверх глобуса страницы, затем тот гаснет
-        canvas.style.opacity = HA.clamp(el / 180, 0, 1).toFixed(3);
-        if (el > 140 && pageBox) pageBox.classList.add("is-handoff");
+        // первые 180 мс (при всплытии — 320 мс) глобус окна проявляется, затем глобус страницы гаснет
+        canvas.style.opacity = HA.clamp(el / (pop ? 320 : 180), 0, 1).toFixed(3);
+        if ((pop || el > 140) && pageBox) pageBox.classList.add("is-handoff");
       } else {
         // обратно: глобус страницы проявляется под концом сворачивания, холст гаснет
         if (u > 0.78 && pageBox) pageBox.classList.remove("is-handoff");
-        canvas.style.opacity = HA.clamp((1 - u) / 0.16, 0, 1).toFixed(3);
+        canvas.style.opacity = HA.clamp((1 - u) / (pop ? 0.22 : 0.16), 0, 1).toFixed(3);
       }
     }
     function chromeDone() { bg.style.opacity = ""; bar.style.opacity = ""; bar.style.transform = ""; canvas.style.opacity = ""; }
@@ -389,7 +390,7 @@
         st.tr = [m.c0[0] + (m.c1[0] - m.c0[0]) * t, m.c0[1] + (m.c1[1] - m.c0[1]) * t];
         st.clip = clipFor(t);
         st.moving = true; st.dirty = true; again = true;
-        chrome(t, u, m.dir, now - m.t0);
+        chrome(t, u, m.dir, now - m.t0, m.pop);
         if (u >= 1) { st.morph = null; if (m.done) m.done(); }
       } else if (st.anim) {
         var a = st.anim, v = Math.min(1, (now - a.t0) / a.dur), ev = HA.easeInOut(v);
@@ -781,9 +782,15 @@
       var L = st0.lens;
       var R = L.R * Math.min(2.2, gc.z);
       var cx = b.left + L.cx - (st.full ? 0 : sb.left), cy = b.top + L.cy - (st.full ? 0 : sb.top);
-      // глобус вне экрана — из центра
-      if (b.bottom < 0 || b.top > window.innerHeight) { cx = OX + SW / 2; cy = OY + SH / 2; R = Math.min(SW, SH) * 0.3; }
-      return { rot: [gc.rot[0], gc.rot[1]], s: R, c: [cx, cy] };
+      // глобус страницы виден не целиком (страница прокручена, узкое окно) — подхватывать
+      // его «обрубок» некрасиво: атлас всплывает целым глобусом в центре окна карты
+      var pad = 6, gx = b.left + L.cx, gy = b.top + L.cy;
+      var whole = gx - R >= -pad && gy - R >= -pad && gx + R <= window.innerWidth + pad && gy + R <= window.innerHeight + pad;
+      if (!whole) {
+        R = Math.min(SW, SH) * 0.36;
+        return { rot: [gc.rot[0], gc.rot[1]], s: R, c: [OX + SW / 2, OY + SH / 2], pop: true };
+      }
+      return { rot: [gc.rot[0], gc.rot[1]], s: R, c: [cx, cy], pop: false };
     }
     function lonNear(target, from) { var d = target - from; while (d > 180) d -= 360; while (d < -180) d += 360; return from + d; }
     var lastOpener = null;
@@ -818,7 +825,7 @@
         st.morph = {
           t0: performance.now(), dur: 1700, dir: 1,
           rot0: s0.rot, rot1: [lonNear(rot1[0], s0.rot[0]), rot1[1]],
-          s0: s0.s, s1: S1, c0: s0.c, c1: [OX + SW / 2, OY + SH / 2],
+          s0: s0.pop ? s0.s * 0.78 : s0.s, s1: S1, c0: s0.c, c1: [OX + SW / 2, OY + SH / 2], pop: s0.pop,
           done: function () {
             oceanTex = null; shadeTex = null;
             layout(false); chromeDone();
@@ -828,7 +835,7 @@
           }
         };
         st.t = 0; st.rot = s0.rot; st.s = s0.s; st.tr = s0.c; st.clip = 90;
-        chrome(0, 0, 1, 0);
+        chrome(0, 0, 1, 0, s0.pop);
         kick();
       }
       // фокус — на заголовок окна (без рамки); дальше Tab ведёт к кнопкам и карте
@@ -867,7 +874,7 @@
       st.morph = {
         t0: performance.now(), dur: 1200, dir: -1,
         rot0: s0.rot, rot1: [lonNear(-LON0, s0.rot[0]), 0],
-        s0: s0.s, s1: S1 * st.k, c0: s0.c, c1: c,
+        s0: s0.pop ? s0.s * 0.78 : s0.s, s1: S1 * st.k, c0: s0.c, c1: c, pop: s0.pop,
         done: finishClose
       };
       kick();
