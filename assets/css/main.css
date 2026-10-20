@@ -733,10 +733,15 @@ button.link-act{appearance:none;border:0;background:none;padding:6px 0;min-heigh
 .globe-box.is-engaged .globe-canvas{cursor:grab}
 
 html.amap-lock,html.amap-lock body{overflow:hidden}
-.amap{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:var(--paper);
-  background-image:inherit;opacity:0;transition:opacity .35s var(--ease)}
+.amap{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:transparent}
+.amap__bg{position:absolute;inset:0;z-index:0;background-color:var(--paper);
+  background-image:radial-gradient(ellipse at 50% 45%,rgba(255,252,240,.55),rgba(244,236,217,0) 60%),radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 55%,rgba(120,90,50,.12));opacity:0}
+.amap.is-flat .amap__bg{opacity:1}
+.amap__body{position:relative;z-index:1}
+.amap__canvas.is-full{position:fixed;left:0;top:0;z-index:2;pointer-events:none}
+.globe-box{transition:opacity .28s var(--ease)}
+.globe-box.is-handoff{opacity:0}
 .amap[hidden]{display:none}
-.amap.is-open{opacity:1}
 .amap__bar{flex:none;display:flex;align-items:center;gap:16px 24px;flex-wrap:wrap;padding:12px clamp(14px,2.4vw,32px);
   border-bottom:1px solid var(--rule-strong);box-shadow:0 3px 0 -2px var(--rule);background:rgba(244,236,217,.95);position:relative;z-index:3}
 .amap__h{margin:0;font:400 clamp(20px,1.7vw,26px)/1.1 var(--f-display);color:var(--ink);white-space:nowrap}
@@ -751,10 +756,9 @@ html.amap-lock,html.amap-lock body{overflow:hidden}
 .amap__canvas.is-dragging{cursor:grabbing}
 
 /* шапка, боковая панель и подсказки появляются, когда лист развернулся */
-.amap__bar,.amap__side,.amap__zoom,.amap__legend{transition:opacity .45s var(--ease),transform .45s var(--ease)}
+.amap__side,.amap__zoom,.amap__legend{transition:opacity .45s var(--ease),transform .45s var(--ease)}
 .amap:not(.is-flat) .amap__side{opacity:0;transform:translateX(24px)}
 .amap:not(.is-flat) .amap__zoom,.amap:not(.is-flat) .amap__legend{opacity:0}
-.amap.is-closing .amap__bar{opacity:.4}
 
 .amap__zoom{position:absolute;right:16px;top:16px;display:flex;flex-direction:column;border:1px solid var(--ink-2);background:var(--paper-card);box-shadow:var(--shadow);border-radius:2px}
 .amap__zoom button{appearance:none;width:44px;height:44px;border:0;background:none;color:var(--ink);font:400 24px/1 var(--f-display);cursor:pointer;display:grid;place-items:center}

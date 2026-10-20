@@ -57,9 +57,10 @@
         карту Natural Earth (разрез по линии перемены дат делает d3). */
   var SPLIT = 0.5;
   function phase(t) {
+    // кусочно-линейно: общее «плавно-разгон-торможение» задаёт время (easeInOut),
+    // поэтому на стыке фаз движение не замирает
     if (t < SPLIT) return { s: 1 - 0.5 * (t / SPLIT), w: 0 };
-    var u = (t - SPLIT) / (1 - SPLIT);
-    return { s: 0.5, w: u * u * (3 - 2 * u) };
+    return { s: 0.5, w: (t - SPLIT) / (1 - SPLIT) };
   }
   function morphRaw(t) {
     if (t <= 0) return orthoRaw;
@@ -90,6 +91,11 @@
     var gen = d3.geoPath(proj);
 
     var W = 0, H = 0, dpr = 1, S1 = 100;
+    // SW×SH — область карты; во время разворота холст на весь экран (W×H), а область карты
+    // смещена на (OX, OY) — так глобус начинает ровно поверх глобуса страницы и не обрезается
+    var SW = 0, SH = 0, OX = 0, OY = 0;
+    var bg = HA.$(".amap__bg", root), bar = HA.$(".amap__bar", root), pageBox = HA.$("#globe-box");
+    var oceanTex = null, shadeTex = null;
     var st = {
       open: false, t: 1, rot: [-LON0, 0], s: 100, tr: [0, 0], clip: null,
       k: 1, tx: 0, ty: 0, anim: null, morph: null,
@@ -104,15 +110,19 @@
       // Natural Earth: ширина ≈ 2 × 2,74, высота ≈ 2 × 1,42 (в единицах радиуса)
       return Math.max(60, Math.min((w - 24) / (2 * 2.74), (h - 24) / (2 * 1.42)));
     }
-    function layout() {
+    function layout(full) {
       var b = stage.getBoundingClientRect();
-      var w = Math.round(b.width), h = Math.round(b.height);
-      if (!w || !h) return false;
+      var sw = Math.round(b.width), sh = Math.round(b.height);
+      if (!sw || !sh) return false;
       dpr = Math.min(2, window.devicePixelRatio || 1);
-      W = w; H = h;
+      st.full = !!full;
+      canvas.classList.toggle("is-full", st.full);
+      if (st.full) { W = window.innerWidth; H = window.innerHeight; OX = Math.round(b.left); OY = Math.round(b.top); }
+      else { W = sw; H = sh; OX = 0; OY = 0; }
+      SW = sw; SH = sh;
       [canvas, base, scratch].forEach(function (c) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); });
       canvas.style.width = W + "px"; canvas.style.height = H + "px";
-      S1 = fitScale(W, H);
+      S1 = fitScale(SW, SH);
       st.dirty = true;
       return true;
     }
@@ -120,13 +130,13 @@
     /* «весь мир»: на широком экране — карта целиком; на узком (телефон) — во всю высоту,
        по ширине листается пальцем */
     function worldK() {
-      if (W >= 600) return 1;
-      return HA.clamp((H - 24) / (2 * 1.42 * S1), 1, 2.4);
+      if (SW >= 600) return 1;
+      return HA.clamp((SH - 24) / (2 * 1.42 * S1), 1, 2.4);
     }
     /* камера плоской карты: k и сдвиг (tx, ty) от центра */
     function applyFlat() {
       st.t = 1; st.rot = [-LON0, 0]; st.clip = null;
-      st.s = S1 * st.k; st.tr = [W / 2 + st.tx, H / 2 + st.ty];
+      st.s = S1 * st.k; st.tr = [OX + SW / 2 + st.tx, OY + SH / 2 + st.ty];
     }
     function setProj() {
       proj = mut(st.t).rotate([st.rot[0], st.rot[1], 0]).scale(st.s).translate(st.tr);
@@ -136,12 +146,12 @@
     }
     /* сдвиг, при котором точка ll стоит в центре при приближении k */
     function centerOn(ll, k) {
-      var p = mut(1).rotate([-LON0, 0, 0]).scale(S1 * k).translate([W / 2, H / 2])(ll);
-      return { k: k, tx: W / 2 - p[0], ty: H / 2 - p[1] };
+      var p = mut(1).rotate([-LON0, 0, 0]).scale(S1 * k).translate([SW / 2, SH / 2])(ll);
+      return { k: k, tx: SW / 2 - p[0], ty: SH / 2 - p[1] };
     }
     function clampPan() {
       var mw = 2 * 2.74 * S1 * st.k, mh = 2 * 1.42 * S1 * st.k;
-      var lx = Math.max(0, (mw - W) / 2 + W * 0.2), ly = Math.max(0, (mh - H) / 2 + H * 0.2);
+      var lx = Math.max(0, (mw - SW) / 2 + SW * 0.2), ly = Math.max(0, (mh - SH) / 2 + SH * 0.2);
       st.tx = HA.clamp(st.tx, -lx, lx); st.ty = HA.clamp(st.ty, -ly, ly);
     }
 
@@ -180,6 +190,12 @@
       g.beginPath();
       for (var y = 0; y < H; y += 3.4) { g.moveTo(0, y); g.lineTo(W, y); }
       g.stroke();
+      // начало разворота: море — та же текстура, что у глобуса на странице, и гаснет к середине
+      var globeA = st.t < SPLIT && oceanTex ? 1 - st.t / SPLIT : 0;
+      if (globeA > 0) {
+        var os = (st.s / oceanTex.R) * oceanTex.S;
+        g.globalAlpha = globeA; g.drawImage(oceanTex.c, st.tr[0] - os / 2, st.tr[1] - os / 2, os, os); g.globalAlpha = 1;
+      }
       var hi = !st.moving && st.k >= 2.2 && G.world.W50;
       G.base.paintMap(g, gen, hi ? G.world.W50 : G.world.W110, {
         scratch: scratch, size: [W, H], dpr: dpr, z: Math.min(3, st.k), q: "high", moving: st.moving,
@@ -194,6 +210,10 @@
         g.fillStyle = i === 0 ? "rgba(200,149,63,.22)" : "rgba(200,149,63,.13)"; g.fill(p);
         g.lineJoin = "round"; g.strokeStyle = C.ochreInk; g.lineWidth = i === 0 ? 1.4 : 1; g.stroke(p);
       });
+      if (globeA > 0 && shadeTex) {
+        var ss = (st.s / shadeTex.R) * shadeTex.S;
+        g.globalAlpha = globeA; g.drawImage(shadeTex.c, st.tr[0] - ss / 2, st.tr[1] - ss / 2, ss, ss); g.globalAlpha = 1;
+      }
       g.restore();
       // рамка листа
       g.strokeStyle = C.inkA(0.7); g.lineWidth = 1.1; g.stroke(sphere);
@@ -201,7 +221,7 @@
     }
 
     /* ---------- шпалеры и подписи ---------- */
-    function hmax() { return HA.clamp(H * 0.15, 48, 120); }
+    function hmax() { return HA.clamp(SH * 0.15, 48, 120); }
     function computeItems() {
       var Hm = hmax() * (st.t < 1 ? 0.6 + 0.4 * st.t : 1);
       var out = [];
@@ -333,6 +353,25 @@
       });
     }
 
+    /* бумага окна, шапка и «передача» глобуса со страницы — по ходу разворота */
+    function sm(a, b, x) { var v = HA.clamp((x - a) / (b - a), 0, 1); return v * v * (3 - 2 * v); }
+    function chrome(t, u, dir, el) {
+      bg.style.opacity = sm(0.08, 0.62, t).toFixed(3);
+      var b = sm(0.5, 0.95, t);
+      bar.style.opacity = b.toFixed(3);
+      bar.style.transform = "translateY(" + ((1 - b) * -14).toFixed(1) + "px)";
+      if (dir > 0) {
+        // первые 180 мс глобус окна проявляется поверх глобуса страницы, затем тот гаснет
+        canvas.style.opacity = HA.clamp(el / 180, 0, 1).toFixed(3);
+        if (el > 140 && pageBox) pageBox.classList.add("is-handoff");
+      } else {
+        // обратно: глобус страницы проявляется под концом сворачивания, холст гаснет
+        if (u > 0.78 && pageBox) pageBox.classList.remove("is-handoff");
+        canvas.style.opacity = HA.clamp((1 - u) / 0.16, 0, 1).toFixed(3);
+      }
+    }
+    function chromeDone() { bg.style.opacity = ""; bar.style.opacity = ""; bar.style.transform = ""; canvas.style.opacity = ""; }
+
     /* ---------- кадр ---------- */
     var raf = 0;
     function kick() { if (!raf && st.open) raf = requestAnimationFrame(tick); }
@@ -350,6 +389,7 @@
         st.tr = [m.c0[0] + (m.c1[0] - m.c0[0]) * t, m.c0[1] + (m.c1[1] - m.c0[1]) * t];
         st.clip = clipFor(t);
         st.moving = true; st.dirty = true; again = true;
+        chrome(t, u, m.dir, now - m.t0);
         if (u >= 1) { st.morph = null; if (m.done) m.done(); }
       } else if (st.anim) {
         var a = st.anim, v = Math.min(1, (now - a.t0) / a.dur), ev = HA.easeInOut(v);
@@ -523,7 +563,7 @@
     /* ---------- действия ---------- */
     function flyTo(c, k, dur) {
       if (st.t === 1) { applyFlat(); setProj(); }
-      var from = (proj.invert && proj.invert([W / 2, H / 2])) || VIEWS.world.c;
+      var from = (proj.invert && proj.invert([OX + SW / 2, OY + SH / 2])) || VIEWS.world.c;
       k = HA.clamp(k, 1, KMAX);
       if (HA.reduced()) { var q = centerOn(c, k); st.k = k; st.tx = q.tx; st.ty = q.ty; applyFlat(); st.dirty = true; kick(); return; }
       st.anim = { t0: performance.now(), dur: dur || 900, k0: st.k, k1: k, c0: from, c1: c };
@@ -582,11 +622,11 @@
       var k1 = HA.clamp(st.k * f, 1, KMAX);
       if (Math.abs(k1 - st.k) < 1e-4) return;
       st.anim = null;
-      if (x == null) { x = W / 2; y = H / 2; }
+      if (x == null) { x = OX + SW / 2; y = OY + SH / 2; }
       // точка под курсором остаётся на месте: T' = p − (p − T)·k'/k
-      var T = [W / 2 + st.tx, H / 2 + st.ty], r = k1 / st.k;
+      var T = [OX + SW / 2 + st.tx, OY + SH / 2 + st.ty], r = k1 / st.k;
       var nT = [x - (x - T[0]) * r, y - (y - T[1]) * r];
-      st.k = k1; st.tx = nT[0] - W / 2; st.ty = nT[1] - H / 2;
+      st.k = k1; st.tx = nT[0] - OX - SW / 2; st.ty = nT[1] - OY - SH / 2;
       clampPan(); applyFlat();
       st.moving = true; st.stillAt = performance.now(); st.dirty = true;
       viewLost(); kick();
@@ -740,9 +780,9 @@
       var b = gb.getBoundingClientRect();
       var L = st0.lens;
       var R = L.R * Math.min(2.2, gc.z);
-      var cx = b.left + L.cx - sb.left, cy = b.top + L.cy - sb.top;
+      var cx = b.left + L.cx - (st.full ? 0 : sb.left), cy = b.top + L.cy - (st.full ? 0 : sb.top);
       // глобус вне экрана — из центра
-      if (b.bottom < 0 || b.top > window.innerHeight) { cx = W / 2; cy = H / 2; R = Math.min(W, H) * 0.3; }
+      if (b.bottom < 0 || b.top > window.innerHeight) { cx = OX + SW / 2; cy = OY + SH / 2; R = Math.min(SW, SH) * 0.3; }
       return { rot: [gc.rot[0], gc.rot[1]], s: R, c: [cx, cy] };
     }
     function lonNear(target, from) { var d = target - from; while (d > 180) d -= 360; while (d < -180) d += 360; return from + d; }
@@ -754,7 +794,8 @@
       root.hidden = false;
       document.documentElement.classList.add("amap-lock");
       st.open = true;
-      layout();
+      var anim = !HA.reduced() && !!globe;
+      layout(anim);
       st.k = 1; st.tx = 0; st.ty = 0; st.view = "world";
       HA.$$(".amap__views button", root).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === "world")); });
       var s0 = globeStart();
@@ -763,22 +804,31 @@
       if (st.sel) { renderRegion(st.sel); showDetail(true); } else showDetail(false);
       updateLegend();
       if (!pushed && window.history && history.pushState) { try { history.pushState({ amap: 1 }, "", "#atlas"); pushed = true; } catch (err) { pushed = false; } }
-      requestAnimationFrame(function () { root.classList.add("is-open"); });
-      if (HA.reduced() || !s0) {
+      root.classList.add("is-open");
+      if (!anim || !s0) {
+        if (st.full) layout(false);
+        chromeDone();
         applyFlat(); st.dirty = true; root.classList.add("is-flat"); kick();
       } else {
         root.classList.remove("is-flat");
+        // текстуры моря и тени — как у глобуса страницы, чтобы первый кадр совпал с ним
+        oceanTex = G.base.makeOcean(Math.round(s0.s), dpr, "high");
+        shadeTex = G.base.makeShade(Math.round(s0.s), dpr, "high");
         var rot1 = [-LON0, 0];
         st.morph = {
-          t0: performance.now() + 120, dur: 1500, dir: 1,
+          t0: performance.now(), dur: 1700, dir: 1,
           rot0: s0.rot, rot1: [lonNear(rot1[0], s0.rot[0]), rot1[1]],
-          s0: s0.s, s1: S1, c0: s0.c, c1: [W / 2, H / 2],
+          s0: s0.s, s1: S1, c0: s0.c, c1: [OX + SW / 2, OY + SH / 2],
           done: function () {
+            oceanTex = null; shadeTex = null;
+            layout(false); chromeDone();
             applyFlat(); st.dirty = true; root.classList.add("is-flat");
             if (worldK() > 1 && !st.sel) setView("world");
+            kick();
           }
         };
         st.t = 0; st.rot = s0.rot; st.s = s0.s; st.tr = s0.c; st.clip = 90;
+        chrome(0, 0, 1, 0);
         kick();
       }
       // фокус — на заголовок окна (без рамки); дальше Tab ведёт к кнопкам и карте
@@ -789,6 +839,10 @@
       st.open = false; st.morph = null; st.anim = null;
       root.classList.remove("is-open", "is-flat", "is-closing");
       root.hidden = true;
+      oceanTex = null; shadeTex = null;
+      if (st.full) layout(false);
+      chromeDone();
+      if (pageBox) pageBox.classList.remove("is-handoff");
       document.documentElement.classList.remove("amap-lock");
       hideTip();
       // выбор на карте → на глобусе страницы
@@ -800,13 +854,18 @@
       if (!fromHistory && pushed) { pushed = false; history.back(); return; } // popstate вызовет close(true)
       pushed = false;
       if (location.hash === "#atlas" && history.replaceState) { try { history.replaceState(null, "", location.pathname + location.search); } catch (err) { /* нет */ } }
+      if (HA.reduced() || !globe || st.t < 1) { finishClose(); return; }
+      layout(true);
       var s0 = globeStart();
-      if (HA.reduced() || !s0 || st.t < 1) { finishClose(); return; }
+      if (!s0) { finishClose(); return; }
       root.classList.add("is-closing"); root.classList.remove("is-flat");
       hideTip();
-      var c = [W / 2 + st.tx, H / 2 + st.ty];
+      st.anim = null;
+      oceanTex = G.base.makeOcean(Math.round(s0.s), dpr, "high");
+      shadeTex = G.base.makeShade(Math.round(s0.s), dpr, "high");
+      var c = [OX + SW / 2 + st.tx, OY + SH / 2 + st.ty];
       st.morph = {
-        t0: performance.now(), dur: 900, dir: -1,
+        t0: performance.now(), dur: 1200, dir: -1,
         rot0: s0.rot, rot1: [lonNear(-LON0, s0.rot[0]), 0],
         s0: s0.s, s1: S1 * st.k, c0: s0.c, c1: c,
         done: finishClose
