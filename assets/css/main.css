@@ -738,7 +738,10 @@ html.amap-lock,html.amap-lock body{overflow:hidden}
   background-image:radial-gradient(ellipse at 50% 45%,rgba(255,252,240,.55),rgba(244,236,217,0) 60%),radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 55%,rgba(120,90,50,.12));opacity:0}
 .amap.is-flat .amap__bg{opacity:1}
 .amap__body{position:relative;z-index:1}
-.amap__canvas.is-full{position:fixed;left:0;top:0;z-index:2;pointer-events:none}
+.amap__canvas.is-full{position:fixed;left:0;top:0;z-index:2}
+.amap:not(.is-flat) .amap__canvas{pointer-events:none}
+.amap__side{position:relative;z-index:3;background:#F7F0DF!important}
+.amap__zoom,.amap__legend{z-index:4}
 .globe-box{transition:opacity .28s var(--ease)}
 .globe-box.is-handoff{opacity:0}
 .amap[hidden]{display:none}

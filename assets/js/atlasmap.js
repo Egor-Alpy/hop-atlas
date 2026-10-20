@@ -87,6 +87,7 @@
     var qIn = HA.$("#amap-q"), legend = HA.$("#amap-legend"), side = HA.$("#amap-side");
     var base = document.createElement("canvas"), bctx = base.getContext("2d");
     var scratch = document.createElement("canvas");
+    var qprev = document.createElement("canvas"), qctx = qprev.getContext("2d"); // последний «облегчённый» кадр — растворяется в подробный
     var proj = mut(1).clipAngle(null).precision(0.4);
     var gen = d3.geoPath(proj);
 
@@ -120,7 +121,7 @@
       if (st.full) { W = window.innerWidth; H = window.innerHeight; OX = Math.round(b.left); OY = Math.round(b.top); }
       else { W = sw; H = sh; OX = 0; OY = 0; }
       SW = sw; SH = sh;
-      [canvas, base, scratch].forEach(function (c) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); });
+      [canvas, base, scratch, qprev].forEach(function (c) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); });
       canvas.style.width = W + "px"; canvas.style.height = H + "px";
       S1 = fitScale(SW, SH);
       st.dirty = true;
@@ -198,7 +199,7 @@
       }
       var hi = !st.moving && st.k >= 2.2 && G.world.W50;
       G.base.paintMap(g, gen, hi ? G.world.W50 : G.world.W110, {
-        scratch: scratch, size: [W, H], dpr: dpr, z: Math.min(3, st.k), q: "high", moving: st.moving,
+        scratch: scratch, size: [W, H], dpr: dpr, z: Math.min(3, st.k), q: st.morph ? "low" : "high", moving: st.moving,
         gratGeo: st.k >= 3 ? G.world.GRAT10 : G.world.GRAT
       });
       // страна под курсором / выбранная — охристый контур
@@ -223,7 +224,7 @@
     /* ---------- шпалеры и подписи ---------- */
     function hmax() { return HA.clamp(SH * 0.15, 48, 120); }
     function computeItems() {
-      var Hm = hmax() * (st.t < 1 ? 0.6 + 0.4 * st.t : 1);
+      var Hm = hmax();
       var out = [];
       D.ranked.forEach(function (r) {
         var p = proj([r.lon, r.lat]);
@@ -237,12 +238,18 @@
       out.sort(function (a, b) { return a.y - b.y; });
       return out;
     }
-    function drawItems() {
+    function drawItems(now) {
       items = computeItems();
       items.forEach(function (it) {
-        it.box = G.trellis.draw(ctx, { x: it.x, y: it.y, h: it.h, t: it.r.t, alpha: 1, state: it.state, seed: it.r.i * 7 + 3 });
+        var g = grow(it.r.rank, now);
+        it.g = g;
+        if (g <= 0.01) return;
+        it.box = G.trellis.draw(ctx, { x: it.x, y: it.y, h: it.h * g, t: it.r.t, alpha: Math.min(1, g * 1.6), state: it.state, seed: it.r.i * 7 + 3 });
       });
-      items.forEach(function (it) { G.trellis.marker(ctx, it.x, it.y, it.state === "selected"); });
+      items.forEach(function (it) {
+        if (it.g <= 0.01) return;
+        ctx.globalAlpha = Math.min(1, it.g * 2); G.trellis.marker(ctx, it.x, it.y, it.state === "selected"); ctx.globalAlpha = 1;
+      });
     }
     function rr(g, x, y, w, h) { g.beginPath(); g.rect(x, y, w, h); }
     function drawLabels() {
@@ -257,7 +264,7 @@
       }).filter(function (it, i) { return i < n || it.state === "selected" || it.state === "hot"; });
       ctx.textBaseline = "alphabetic";
       cand.forEach(function (it) {
-        if (it.x < -40 || it.x > W + 40 || it.y < -10 || it.y > H + 60) return;
+        if (it.x < OX - 40 || it.x > OX + SW + 40 || it.y < OY - 10 || it.y > OY + SH + 60) return;
         var name = short(it.r.name), val = HA.fmt(it.r.t) + NB + "т";
         ctx.font = "italic 15px 'Old Standard TT', serif";
         var w1 = ctx.measureText(name).width;
@@ -269,7 +276,7 @@
         for (var i = 0; i < tries.length; i++) {
           var bx = it.x + tries[i][0], by = it.y + tries[i][1];
           var box = { x0: bx, y0: by, x1: bx + bw, y1: by + bh };
-          if (box.x0 < 4 || box.x1 > W - 4 || box.y0 < 4 || box.y1 > H - 4) continue;
+          if (box.x0 < OX + 4 || box.x1 > OX + SW - 4 || box.y0 < OY + 4 || box.y1 > OY + SH - 4) continue;
           if (placed.some(function (b) { return b.x0 < box.x1 + 3 && b.x1 > box.x0 - 3 && b.y0 < box.y1 + 2 && b.y1 > box.y0 - 2; })) continue;
           placed.push(box);
           var hot = it.state === "selected" || it.state === "hot";
@@ -332,7 +339,7 @@
         var tw = ctx.measureText(txt).width + 10;
         // короткий маршрут (Чехия → Германия) — подпись ниже линии, длинные — над дугой
         var below = L < 120 || (reverse && f.from === "США");
-        var lx = HA.clamp(m[0] - tw / 2, 4, W - tw - 4), ly = HA.clamp(below ? m[1] + 12 + (L < 120 ? 22 : 0) : m[1] - 30, 4, H - 24);
+        var lx = HA.clamp(m[0] - tw / 2, OX + 4, OX + SW - tw - 4), ly = HA.clamp(below ? m[1] + 12 + (L < 120 ? 22 : 0) : m[1] - 30, OY + 4, OY + SH - 24);
         ctx.restore();
         flowPaths.push({ idx: idx, pts: path, txt: txt, hot: hot, box: { x0: lx, y0: ly, x1: lx + tw, y1: ly + 20 }, anchor: m });
       });
@@ -373,6 +380,25 @@
     }
     function chromeDone() { bg.style.opacity = ""; bar.style.opacity = ""; bar.style.transform = ""; canvas.style.opacity = ""; }
 
+    /* «квинтик» — мягче кубического: без резкого разгона и без «удара» в конце */
+    function ease5(x) { return x < 0.5 ? 16 * x * x * x * x * x : 1 - Math.pow(-2 * x + 2, 5) / 2; }
+    function easeBack(x) { var c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    /* «прорастание» шпалер: 0..1 для региона ранга rank (крупные — раньше); подписи — после */
+    function grow(rank, now) {
+      var sp = st.sprout;
+      if (st.morph && (!sp || sp.dir > 0)) return 0;
+      if (!sp) return 1;
+      if (sp.dir > 0) { var x = HA.clamp((now - sp.t0 - (rank - 1) * 45) / 520, 0, 1); return x >= 1 ? 1 : Math.max(0, easeBack(x)); }
+      return 1 - HA.clamp((now - sp.t0) / 260, 0, 1);
+    }
+    function labelsAlpha(now) {
+      var sp = st.sprout;
+      if (st.morph && (!sp || sp.dir > 0)) return 0;
+      if (!sp) return 1;
+      if (sp.dir > 0) return HA.clamp((now - sp.t0 - 650) / 350, 0, 1);
+      return 1 - HA.clamp((now - sp.t0) / 180, 0, 1);
+    }
+
     /* ---------- кадр ---------- */
     var raf = 0;
     function kick() { if (!raf && st.open) raf = requestAnimationFrame(tick); }
@@ -380,17 +406,24 @@
       raf = 0;
       var again = false;
       if (st.morph) {
-        var m = st.morph, u = Math.min(1, (now - m.t0) / m.dur), e = HA.easeInOut(u);
-        var t = m.dir > 0 ? e : 1 - e;
+        var m = st.morph;
+        // отсчёт — с первого кадра (тяжёлая подготовка не «съедает» начало анимации)
+        if (!m.t0) m.t0 = now + (m.delay || 0);
+        var u = HA.clamp((now - m.t0) / m.dur, 0, 1);
+        // хореография: камера (центр, масштаб, поворот) — плавно всю дорогу; форма листа
+        // начинает расправляться чуть позже и успевает к концу — шар сперва «приподнимается»
+        var eCam = ease5(u), eShape = ease5(HA.clamp((u - 0.1) / 0.9, 0, 1));
+        var tc = m.dir > 0 ? eCam : 1 - eCam, t = m.dir > 0 ? eShape : 1 - eShape;
         st.t = t;
-        // поворот: от глобуса к плоской карте; масштаб — в логарифмах; центр — по прямой
-        var lon = m.rot0[0] + (m.rot1[0] - m.rot0[0]) * t, lat = m.rot0[1] + (m.rot1[1] - m.rot0[1]) * t;
+        var lon = m.rot0[0] + (m.rot1[0] - m.rot0[0]) * tc, lat = m.rot0[1] + (m.rot1[1] - m.rot0[1]) * tc;
         st.rot = [lon, lat];
-        st.s = Math.exp(Math.log(m.s0) + (Math.log(m.s1) - Math.log(m.s0)) * t);
-        st.tr = [m.c0[0] + (m.c1[0] - m.c0[0]) * t, m.c0[1] + (m.c1[1] - m.c0[1]) * t];
+        // масштаб — в логарифмах, с лёгким «вдохом» в начале (шар приподнимается к зрителю)
+        var lift = 1 + 0.07 * Math.sin(Math.PI * HA.clamp(tc / 0.45, 0, 1));
+        st.s = Math.exp(Math.log(m.s0) + (Math.log(m.s1) - Math.log(m.s0)) * tc) * lift;
+        st.tr = [m.c0[0] + (m.c1[0] - m.c0[0]) * tc, m.c0[1] + (m.c1[1] - m.c0[1]) * tc];
         st.clip = clipFor(t);
         st.moving = true; st.dirty = true; again = true;
-        chrome(t, u, m.dir, now - m.t0, m.pop);
+        if (now >= m.t0) chrome(t, u, m.dir, now - m.t0, m.pop);
         if (u >= 1) { st.morph = null; if (m.done) m.done(); }
       } else if (st.anim) {
         var a = st.anim, v = Math.min(1, (now - a.t0) / a.dur), ev = HA.easeInOut(v);
@@ -408,13 +441,18 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(base, 0, 0);
+      if (st.qfade) {
+        var qa = 1 - HA.clamp((now - st.qfade) / 380, 0, 1);
+        if (qa > 0) { ctx.globalAlpha = qa; ctx.drawImage(qprev, 0, 0); ctx.globalAlpha = 1; again = true; } else st.qfade = 0;
+      }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawItems();
+      drawItems(now);
       drawFlows(now);
-      drawLabels();
-      drawFlowLabels();
+      var la = labelsAlpha(now);
+      if (la > 0) { ctx.globalAlpha = la; drawLabels(); drawFlowLabels(); ctx.globalAlpha = 1; } else labelsHit = [];
       var dashing = st.layer === "trade" && !HA.reduced() && now - st.dash0 < 12000;
-      if (again || st.moving || dashing) kick();
+      var sprouting = st.sprout && now - st.sprout.t0 < 1400;
+      if (again || st.moving || dashing || sprouting) kick();
     }
 
     /* ---------- попадание ---------- */
@@ -462,9 +500,10 @@
     function showTip(html, x, y) {
       tip.innerHTML = html; HA.typoDOM(tip); tip.hidden = false;
       var tw = tip.offsetWidth, th = tip.offsetHeight;
+      x -= OX; y -= OY; // холст — на весь экран, справка — внутри области карты
       var lx = x + 18, ly = y + 16;
-      if (lx + tw > W - 8) lx = x - tw - 14;
-      if (ly + th > H - 8) ly = y - th - 12;
+      if (lx + tw > SW - 8) lx = x - tw - 14;
+      if (ly + th > SH - 8) ly = y - th - 12;
       tip.style.transform = "translate(" + Math.round(Math.max(8, lx)) + "px," + Math.round(Math.max(8, ly)) + "px)";
     }
     function hideTip() { tip.hidden = true; }
@@ -590,7 +629,7 @@
         renderRegion(id); showDetail(true);
         if (o.fly !== false) {
           var p = proj([r.lon, r.lat]);
-          var vis = p && p[0] > W * 0.12 && p[0] < W * 0.88 && p[1] > H * 0.15 && p[1] < H * 0.9;
+          var vis = p && p[0] > OX + SW * 0.12 && p[0] < OX + SW * 0.88 && p[1] > OY + SH * 0.15 && p[1] < OY + SH * 0.9;
           var kk = D.europeIds.indexOf(id) >= 0 ? Math.max(st.k, 5) : Math.max(st.k, 2.4);
           if (!vis || st.k < kk * 0.8) { flyTo([r.lon, r.lat], kk); viewLost(); }
         }
@@ -802,7 +841,7 @@
       document.documentElement.classList.add("amap-lock");
       st.open = true;
       var anim = !HA.reduced() && !!globe;
-      layout(anim);
+      layout(true);
       st.k = 1; st.tx = 0; st.ty = 0; st.view = "world";
       HA.$$(".amap__views button", root).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === "world")); });
       var s0 = globeStart();
@@ -813,8 +852,8 @@
       if (!pushed && window.history && history.pushState) { try { history.pushState({ amap: 1 }, "", "#atlas"); pushed = true; } catch (err) { pushed = false; } }
       root.classList.add("is-open");
       if (!anim || !s0) {
-        if (st.full) layout(false);
         chromeDone();
+        st.sprout = { t0: -1e9, dir: 1 };
         applyFlat(); st.dirty = true; root.classList.add("is-flat"); kick();
       } else {
         root.classList.remove("is-flat");
@@ -823,13 +862,18 @@
         shadeTex = G.base.makeShade(Math.round(s0.s), dpr, "high");
         var rot1 = [-LON0, 0];
         st.morph = {
-          t0: performance.now(), dur: 1700, dir: 1,
+          t0: 0, dur: 2000, dir: 1,
           rot0: s0.rot, rot1: [lonNear(rot1[0], s0.rot[0]), rot1[1]],
           s0: s0.pop ? s0.s * 0.78 : s0.s, s1: S1, c0: s0.c, c1: [OX + SW / 2, OY + SH / 2], pop: s0.pop,
           done: function () {
             oceanTex = null; shadeTex = null;
-            layout(false); chromeDone();
+            // облегчённая картинка разворота плавно уступает подробной (волны у берегов, вторая акварель)
+            qctx.setTransform(1, 0, 0, 1, 0, 0); qctx.clearRect(0, 0, qprev.width, qprev.height); qctx.drawImage(base, 0, 0);
+            st.qfade = performance.now();
+            chromeDone();
             applyFlat(); st.dirty = true; root.classList.add("is-flat");
+            // лист лёг — шпалеры «прорастают» по очереди, от крупных к мелким, потом подписи
+            st.sprout = { t0: performance.now(), dir: 1 };
             if (worldK() > 1 && !st.sel) setView("world");
             kick();
           }
@@ -847,7 +891,6 @@
       root.classList.remove("is-open", "is-flat", "is-closing");
       root.hidden = true;
       oceanTex = null; shadeTex = null;
-      if (st.full) layout(false);
       chromeDone();
       if (pageBox) pageBox.classList.remove("is-handoff");
       document.documentElement.classList.remove("amap-lock");
@@ -862,7 +905,6 @@
       pushed = false;
       if (location.hash === "#atlas" && history.replaceState) { try { history.replaceState(null, "", location.pathname + location.search); } catch (err) { /* нет */ } }
       if (HA.reduced() || !globe || st.t < 1) { finishClose(); return; }
-      layout(true);
       var s0 = globeStart();
       if (!s0) { finishClose(); return; }
       root.classList.add("is-closing"); root.classList.remove("is-flat");
@@ -871,8 +913,10 @@
       oceanTex = G.base.makeOcean(Math.round(s0.s), dpr, "high");
       shadeTex = G.base.makeShade(Math.round(s0.s), dpr, "high");
       var c = [OX + SW / 2 + st.tx, OY + SH / 2 + st.ty];
+      // сначала шпалеры и подписи «уходят в землю» (0,28 с), затем лист сворачивается в шар
+      st.sprout = { t0: performance.now(), dir: -1 };
       st.morph = {
-        t0: performance.now(), dur: 1200, dir: -1,
+        t0: 0, delay: 280, dur: 1500, dir: -1,
         rot0: s0.rot, rot1: [lonNear(-LON0, s0.rot[0]), 0],
         s0: s0.pop ? s0.s * 0.78 : s0.s, s1: S1 * st.k, c0: s0.c, c1: c, pop: s0.pop,
         done: finishClose
@@ -894,7 +938,7 @@
     window.addEventListener("resize", function () {
       if (!st.open) return;
       clearTimeout(roT);
-      roT = setTimeout(function () { if (layout()) { if (st.t === 1) { clampPan(); applyFlat(); } kick(); } }, 80);
+      roT = setTimeout(function () { if (layout(true)) { if (st.t === 1) { clampPan(); applyFlat(); } kick(); } }, 80);
     });
     G.world.load50(function () { if (st.open) { st.dirty = true; kick(); } });
 
