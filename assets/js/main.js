@@ -96,6 +96,7 @@
     run("шапка", function () { HA.initNav(); });
     globe = run("глобус", function () { return HA.initStage(); });
     if (globe) run("раздел I", function () { HA.initProduction(globe); });
+    run("режим карты", function () { HA.initAtlasMap && HA.initAtlasMap(globe); });
     run("ведомость", function () { HA.initHero && HA.initHero(); });
     run("подвал", function () { HA.initFooter && HA.initFooter(); });
     // перед печатью достраиваем все листы (обработчик — раньше, чем у печати)

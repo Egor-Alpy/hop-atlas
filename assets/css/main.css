@@ -719,3 +719,132 @@ button.link-act{appearance:none;border:0;background:none;padding:6px 0;min-heigh
   *{scroll-behavior:auto!important}
 }
 @keyframes fade-only{from{opacity:0}to{opacity:1}}
+
+/* ---------------- Режим карты «Атлас» ----------------
+   Полноэкранный лист: шапка с видами и слоями, карта, справа — список
+   регионов и подробная панель (на телефоне — шторка снизу). */
+.stage__open{gap:8px}
+.ic--open{transition:transform .15s var(--ease)}
+.btn:hover .ic--open{transform:scale(1.12)}
+.globe-hint{position:absolute;left:50%;top:50%;z-index:6;margin:0;max-width:300px;padding:10px 14px;transform:translate(-50%,-50%);
+  background:rgba(51,40,29,.88);color:var(--on-dark);font:400 15px/1.4 var(--f-text);text-align:center;border-radius:2px;
+  opacity:0;pointer-events:none;transition:opacity .2s var(--ease)}
+.globe-hint.is-on{opacity:1}
+.globe-hint b{font-weight:700}
+.globe-box.is-engaged .globe-canvas{cursor:grab}
+
+html.amap-lock,html.amap-lock body{overflow:hidden}
+.amap{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:var(--paper);
+  background-image:inherit;opacity:0;transition:opacity .35s var(--ease)}
+.amap[hidden]{display:none}
+.amap.is-open{opacity:1}
+.amap__bar{flex:none;display:flex;align-items:center;gap:16px 24px;flex-wrap:wrap;padding:12px clamp(14px,2.4vw,32px);
+  border-bottom:1px solid var(--rule-strong);box-shadow:0 3px 0 -2px var(--rule);background:rgba(244,236,217,.95);position:relative;z-index:3}
+.amap__h{margin:0;font:400 clamp(20px,1.7vw,26px)/1.1 var(--f-display);color:var(--ink);white-space:nowrap}
+.amap__h i{color:var(--hop-ink)}
+.amap__ctrls{display:flex;gap:12px 16px;flex-wrap:wrap;flex:1;justify-content:center}
+.amap__close{margin-left:auto;gap:8px}
+.amap__body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,26vw,380px)}
+.amap__stage{position:relative;min-width:0;min-height:0;overflow:hidden}
+.amap__canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none;outline:none}
+.amap__canvas:focus-visible{box-shadow:inset 0 0 0 2px var(--ochre-ink)}
+.amap__canvas.is-pointing{cursor:pointer}
+.amap__canvas.is-dragging{cursor:grabbing}
+
+/* шапка, боковая панель и подсказки появляются, когда лист развернулся */
+.amap__bar,.amap__side,.amap__zoom,.amap__legend{transition:opacity .45s var(--ease),transform .45s var(--ease)}
+.amap:not(.is-flat) .amap__side{opacity:0;transform:translateX(24px)}
+.amap:not(.is-flat) .amap__zoom,.amap:not(.is-flat) .amap__legend{opacity:0}
+.amap.is-closing .amap__bar{opacity:.4}
+
+.amap__zoom{position:absolute;right:16px;top:16px;display:flex;flex-direction:column;border:1px solid var(--ink-2);background:var(--paper-card);box-shadow:var(--shadow);border-radius:2px}
+.amap__zoom button{appearance:none;width:44px;height:44px;border:0;background:none;color:var(--ink);font:400 24px/1 var(--f-display);cursor:pointer;display:grid;place-items:center}
+.amap__zoom button+button{border-top:1px solid var(--rule)}
+.amap__zoom button:hover{background:var(--hop-pale)}
+.amap__zoom svg{width:18px;height:18px}
+.amap__legend{position:absolute;left:16px;bottom:14px;right:80px;margin:0;display:flex;align-items:center;gap:10px;max-width:640px;
+  padding:8px 12px;background:rgba(250,245,232,.92);border:1px solid var(--rule);font:400 15px/1.35 var(--f-text);color:var(--ink-2)}
+.amap__legend .legend-line__ic{flex:none}
+
+.amap__tip{position:absolute;left:0;top:0;z-index:4;min-width:200px;max-width:280px;padding:10px 14px 9px;pointer-events:none;
+  background:var(--paper-card);border:1px solid var(--rule-strong);box-shadow:var(--shadow);border-radius:2px}
+.amap__tip::before{content:"";position:absolute;inset:3px;border:.75px solid var(--rule);pointer-events:none}
+.amap__tip p{margin:0}
+.amap__tip-k{font:400 14px/1.3 var(--f-text);color:var(--ink-3)}
+.amap__tip-h{font:400 21px/1.15 var(--f-display);color:var(--ink);margin-top:2px!important}
+.amap__tip-v{font:400 27px/1.1 var(--f-display);color:var(--hop-ink);margin-top:4px!important}
+.amap__tip-v .u{font-size:15px;color:var(--ink-2)}
+.amap__tip-v--money{color:var(--vermilion-ink)}
+.amap__tip-s{font:400 15px/1.35 var(--f-text);color:var(--ink-2);margin-top:3px!important}
+.amap__tip-act{font:italic 400 14px/1.3 var(--f-display);color:var(--ochre-ink);margin-top:6px!important}
+
+.amap__side{min-height:0;overflow:auto;overscroll-behavior:contain;border-left:1px solid var(--rule-strong);background:rgba(250,245,232,.7);padding:18px 18px 24px}
+.amap__search{display:flex;align-items:center;gap:8px;padding:0 12px;height:46px;border:1px solid var(--ink-2);background:var(--paper-card);border-radius:2px}
+.amap__search svg{width:17px;height:17px;flex:none;color:var(--ink-3)}
+.amap__search input{flex:1;min-width:0;border:0;background:none;font:400 17px/1 var(--f-text);color:var(--ink);outline:none}
+.amap__search:focus-within{box-shadow:0 0 0 2px var(--ochre-wash);border-color:var(--ochre-ink)}
+.amap__sort{margin:12px 0 6px;width:100%}
+.amap__sort button{flex:1}
+.amap__list{list-style:none;margin:8px 0 0;padding:0}
+.amap__list button{appearance:none;width:100%;display:grid;grid-template-columns:28px minmax(0,1fr) auto;grid-template-rows:auto auto;gap:2px 10px;align-items:baseline;
+  padding:9px 8px 10px;border:0;border-bottom:1px solid var(--rule);background:none;text-align:left;cursor:pointer;color:var(--ink);font:inherit;min-height:44px}
+.amap__list button:hover{background:var(--hop-pale)}
+.amap__list button[aria-current="true"]{background:var(--ochre-wash)}
+.amap__li-n{font:400 15px/1 var(--f-display);color:var(--ink-3);text-align:right}
+.amap__li-t{display:flex;flex-direction:column;min-width:0}
+.amap__li-t b{font:400 17px/1.25 var(--f-text)}
+.amap__li-t small{font:400 14px/1.3 var(--f-text);color:var(--ink-3)}
+.amap__li-v{font:400 16px/1 var(--f-text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.amap__li-bar{grid-column:2/4;height:4px;background:rgba(51,40,29,.07);margin-top:4px}
+.amap__li-bar i{display:block;height:100%;background:var(--hop)}
+.amap__empty{padding:16px 8px;color:var(--ink-3)}
+.amap__sum{display:flex;justify-content:space-between;gap:12px;margin:14px 0 4px;padding-top:10px;border-top:1px solid var(--rule-strong);font:400 16px/1.3 var(--f-text)}
+
+.amap__dtop{display:flex;justify-content:space-between;align-items:center;margin:-6px -6px 10px 0}
+.amap__kick{margin:0;font:400 15px/1.3 var(--f-text);color:var(--ink-3)}
+.amap__dh{margin:2px 0 0;font:400 clamp(26px,2.1vw,32px)/1.1 var(--f-display);color:var(--ink);outline:none}
+.amap__dh:focus-visible{outline:2px dotted var(--ochre-ink);outline-offset:3px}
+.amap__big{margin:10px 0 0;font:400 clamp(34px,2.8vw,42px)/1 var(--f-display);color:var(--hop-ink)}
+.amap__big .u{font-size:18px;color:var(--ink-2)}
+.amap__note{margin:6px 0 0;font:400 15px/1.45 var(--f-text);color:var(--ink-2)}
+.amap__sub{margin:20px 0 8px;padding-top:12px;border-top:1px solid var(--rule);font:400 15px/1.2 var(--f-text);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.amap__detail .quote{margin-top:4px}
+.amap__bars{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.amap__bars li{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(60px,1fr) auto;gap:10px;align-items:center;font:400 15px/1.3 var(--f-text)}
+.amap__bars li.is-me{font-weight:700}
+.amap__bars-t{height:9px;background:rgba(51,40,29,.07)}
+.amap__bars-t i{display:block;height:100%;background:var(--hop)}
+.amap__bars li.is-me .amap__bars-t i{background:var(--ochre)}
+.amap__bars--money .amap__bars-t i{background:var(--vermilion)}
+.amap__bars-v{white-space:nowrap;font-variant-numeric:tabular-nums}
+.amap__lnk{appearance:none;border:0;background:none;padding:0;font:inherit;color:var(--ink);text-decoration:underline dotted 1.2px;text-underline-offset:3px;cursor:pointer;text-align:left}
+.amap__lnk:hover{color:var(--hop-ink)}
+.amap__nav{display:flex;justify-content:space-between;gap:10px;margin-top:22px}
+
+/* телефон и узкий планшет: карта сверху, список — шторкой снизу */
+@media (max-width:900px){
+  .amap__bar{padding:8px 12px;gap:8px}
+  .amap__h i{display:none}
+  .amap__ctrls{order:3;flex-basis:100%;justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  .amap__ctrls .seg{flex:none}
+  .amap__body{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+  .amap__side{border-left:0;border-top:1px solid var(--rule-strong);max-height:42vh;padding:12px 14px 18px}
+  .amap.has-detail .amap__side{max-height:58vh}
+  .amap:not(.is-flat) .amap__side{transform:translateY(24px)}
+  .amap__legend{right:72px;font-size:14px;padding:6px 10px}
+  .amap__zoom{right:10px;top:10px}
+  .amap__tip{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .amap,.amap__bar,.amap__side,.amap__zoom,.amap__legend{transition:none}
+}
+@media print{.amap{display:none!important}}
+.amap__big .fn{font-size:.45em}
+@media (max-width:900px){
+  .amap__legend-x{display:none}
+  .amap.has-detail .amap__legend{display:none}
+  .amap.has-detail .amap__side{max-height:52vh}
+  .amap__ctrls{padding-right:4px}
+}
+.amap__h{outline:none}
+.amap__h:focus{box-shadow:none}

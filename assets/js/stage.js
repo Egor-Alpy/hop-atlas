@@ -40,7 +40,25 @@
   HA.initStage = function () {
     var box = HA.$("#globe-box");
     if (!box || !window.d3 || !d3.geoOrthographic || !window.topojson || !HA.globe || !HA.globe.create) return null;
-    var globe = HA.globe.create({ box: box, canvas: HA.$("#globe"), ring: HA.$("#globe-ring") });
+    /* колёсико над глобусом на странице: зумит, только если глобус «включён» нажатием
+       или зажат Ctrl/⌘ — иначе страница прокручивается дальше и всплывает подсказка
+       (щипок на тачпаде приходит как wheel с ctrlKey — он зумит всегда) */
+    var engaged = false;
+    var mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+    var globe = HA.globe.create({
+      box: box, canvas: HA.$("#globe"), ring: HA.$("#globe-ring"),
+      wheel: function (e) { return engaged || e.ctrlKey || e.metaKey; }
+    });
+    box.addEventListener("pointerdown", function () { engaged = true; box.classList.add("is-engaged"); });
+    box.addEventListener("pointerleave", function () { engaged = false; box.classList.remove("is-engaged"); });
+    var hint = HA.$("#globe-hint"), hintT = 0;
+    if (hint) hint.innerHTML = "Чтобы приблизить, нажмите на&nbsp;глобус или удерживайте <b>" + (mac ? "⌘" : "Ctrl") + "</b>. Большая карта&nbsp;— «Открыть атлас».";
+    globe.on("wheel-pass", function () {
+      if (!hint) return;
+      hint.classList.add("is-on");
+      clearTimeout(hintT);
+      hintT = setTimeout(function () { hint.classList.remove("is-on"); }, 1800);
+    });
     HA.debug = { globe: globe }; // для проверки в консоли браузера (отладка)
     setTimeout(function () { var r = HA.$("#globe-ring"); if (r) r.classList.add("is-drawn"); }, 2400);
 
